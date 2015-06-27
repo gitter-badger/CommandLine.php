@@ -3,9 +3,9 @@ class CommandLine
 {
     public static $args;
 
-    public static function parseArgs($argv = null)
+    public static function parseArgv($argv = null)
     {
-        $argv = $argv ? $argv : $_SERVER['argv'];
+        $argv = $argv !== null ? $argv : $_SERVER['argv'];
 
         $out = [0 => array_shift($argv)];
         $countArgs = count($argv);
@@ -14,7 +14,7 @@ class CommandLine
             if (substr($arg, 0, 2) === '--') { // --foo --bar=baz
                 $eqPos = strpos($arg, '=');
                 if ($eqPos === false) { // --foo
-                    $key = substr($arg, 2);
+                    $key = substr($arg, 0);
                     if ($i + 1 < $j && $argv[$i + 1][0] !== '-') { // --foo value
                         $value = $argv[$i + 1];
                         $i++;
@@ -23,20 +23,20 @@ class CommandLine
                     }
                     $out[$key] = $value;
                 } else { // --bar=baz
-                    $key = substr($arg, 2, $eqPos - 2);
+                    $key = substr($arg, 0, $eqPos );
                     $value = substr($arg, $eqPos + 1);
                     $out[$key] = $value;
                 }
             } else { // -k=value -abc
                 if (substr($arg, 0, 1) === '-') {
                     if (substr($arg, 2, 1) === '=') { // -k=value
-                        $key = substr($arg, 1, 1);
+                        $key = substr($arg, 0, 2);
                         $value = substr($arg, 3);
                         $out[$key] = $value;
                     } else { // -abc
                         $chars = str_split(substr($arg, 1));
                         foreach ($chars as $char) {
-                            $key = $char;
+                            $key = '-'.$char;
                             $value = isset($out[$key]) ? $out[$key] : true;
                             $out[$key] = $value;
                         }
@@ -55,6 +55,23 @@ class CommandLine
         self::$args = $out;
 
         return $out;
+    }
+
+    public static function parseString($command)
+    {
+        $arguments = false;
+        $quote = "(?:'(?:[^']|\\\\')*')";
+        $doubleQuote = '(?:"(?:[^"]|\\\\")*")';
+        $withoutQuote = '(?:[^\'"\s]+)';
+        $name = '(?:^|\s+)(?:-{0,2}\w+=?)';
+        if (preg_match_all("%(?<argv>{$name}?({$quote}|{$doubleQuote}|{$withoutQuote}))%i", $command, $matches)) {
+            $arguments = array_map(function($a) {
+                $a = trim($a);
+                $a = preg_replace('%(^["\']|["\']$|(?<==)["\'])%', '', $a);
+                return $a;
+            }, $matches['argv']);
+        }
+        return self::parseArgv($arguments);
     }
 
     public static function getBoolean($key, $default = false)
